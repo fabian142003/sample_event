@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "867224897948",
+    "project_id": "sampletrack-db",
+    "storage_bucket": "sampletrack-db.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:867224897948:android:4b7a019098e41e54c86059",
+        "android_client_info": {
+          "package_name": "com.example.sample_track_shell"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCqjrJyceMaReSDCd3X3V5gYmjA8tnt5No"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
