@@ -3,13 +3,16 @@ import 'package:flutter/material.dart';
 import '../models/sample.dart';
 
 class SampleCard extends StatelessWidget {
+
   const SampleCard({
     super.key,
     required this.sample,
+    required this.statusLabel,
     required this.onTap,
   });
 
   final Sample sample;
+  final String statusLabel;
   final VoidCallback onTap;
 
   @override
@@ -57,7 +60,7 @@ class SampleCard extends StatelessWidget {
                 children: [
                   _PriorityChip(priority: sample.priority),
                   const SizedBox(height: 8),
-                  const _InitialStatusChip(),
+                   _StatusChip(label: statusLabel),
                 ],
               ),
             ],
@@ -93,8 +96,10 @@ class _PriorityChip extends StatelessWidget {
   }
 }
 
-class _InitialStatusChip extends StatelessWidget {
-  const _InitialStatusChip();
+class _StatusChip extends StatelessWidget {
+  const _StatusChip({required this.label});
+
+  final String label;
 
   @override
   Widget build(BuildContext context) {
@@ -104,15 +109,12 @@ class _InitialStatusChip extends StatelessWidget {
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(20),
       ),
-      child: const Row(
+      child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(Icons.circle, size: 7),
           SizedBox(width: 5),
-          Text(
-            'Sin eventos',
-            style: TextStyle(fontSize: 12),
-          ),
+          Text(label, style: TextStyle(fontSize: 12)),
         ],
       ),
     );

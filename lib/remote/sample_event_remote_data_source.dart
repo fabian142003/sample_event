@@ -13,6 +13,8 @@ class SampleEventRemoteDataSource {
   CollectionReference<Map<String, dynamic>> get _events =>
       firestore.collection('sample_events');
 
+  String createEventId() => _events.doc().id;
+
   Future<void> saveEvent(SampleEvent event) async {
     final json = event.toJson();
     json['createdAt'] = Timestamp.fromDate(event.createdAt);

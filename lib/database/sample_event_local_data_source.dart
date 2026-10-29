@@ -1,3 +1,5 @@
+import 'package:flutter/widgets.dart';
+
 import '../models/sample_event.dart';
 import 'app_database.dart';
 
@@ -27,6 +29,9 @@ class SampleEventLocalDataSource {
             createdAt: event.createdAt,
           ),
         );
+
+      debugPrint('Se guarda local evento: ${event.type} de muestraId: ${event.sampleId}');
+
   }
 
   Future<List<SampleEvent>> getEventsForSample(String sampleId) async {
@@ -34,7 +39,8 @@ class SampleEventLocalDataSource {
     final rows = await (db.select(db.sampleEvents)
           ..where((event) => event.sampleId.equals(sampleId))).get();
 
-    return rows.map(_toDomain).toList();
+    List<SampleEvent> events =  rows.map(_toDomain).toList();
+    return events;
   }
 
   //reemplaza eventos con los obtenidos en firebase -> para sincronizar

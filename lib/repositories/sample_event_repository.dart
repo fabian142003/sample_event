@@ -1,8 +1,19 @@
 import 'package:flutter/foundation.dart';
 import 'package:sample_track_shell/database/sample_event_local_data_source.dart';
+import 'package:sample_track_shell/models/sample_status.dart';
 import 'package:sample_track_shell/remote/sample_event_remote_data_source.dart';
 
 import '../models/sample_event.dart';
+
+
+class EventException implements Exception {
+  const EventException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
 
 //Instancia devuelve eventos local/remoto 
 class SampleEventsLoadResult {
@@ -55,7 +66,34 @@ class SampleEventRepository {
 
   }
 
-  Future<void> registerEvent(SampleEvent event) async {
+  //unicamente permite registrar el evento de una muestra con el estado siguiente
+  Future<void> registerNextEvent(String sampleId) async {
+    final loadResult = await getEventsForSample(sampleId);
+    final events = loadResult.events;
+    final currentStatus = SampleStatus.fromEvents(events);
+    final nextStatus = SampleStatus.nextForEvents(events);
+    
+    if (nextStatus == null) {
+      if (events.isNotEmpty && currentStatus == null) {
+        throw const EventException(
+          "error registrar evento: el historial tiene el ultimo evento con estado desconocido"
+          );
+        }
+
+      throw const EventException(
+        "error registrar evento: la muestra ya completo todos los estados"
+      );
+    }
+
+    final event = SampleEvent(
+      id: remote.createEventId(),
+      sampleId: sampleId,
+      type: nextStatus.eventType,
+      createdAt: DateTime.now(),
+    );
+
+
+
     await remote.saveEvent(event);
     await local.saveEvent(event);
   }

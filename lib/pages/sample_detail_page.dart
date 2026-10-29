@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:sample_track_shell/models/sample_status.dart';
 import 'package:sample_track_shell/repositories/sample_event_repository.dart';
 
 import '../models/sample.dart';
@@ -18,77 +19,136 @@ class SampleDetailPage extends StatefulWidget {
 }
 
 class _SampleDetailPageState extends State<SampleDetailPage> {
-
   late Future<SampleEventsLoadResult> _eventsFuture;
+  bool _isRegistering = false;
 
   @override
   void initState() {
     super.initState();
-    _eventsFuture = widget.sampleEventRepository
-        .getEventsForSample(widget.sample.id);
+    _eventsFuture =
+        widget.sampleEventRepository.getEventsForSample(widget.sample.id);
   }
 
+  Future<void> _registerNextEvent() async {
+    if (_isRegistering) return;
 
+    try {
+      setState(() => _isRegistering = true);
+      await widget.sampleEventRepository.registerNextEvent(widget.sample.id);
+
+      if (!mounted) return;
+
+      setState(() {
+        _eventsFuture =
+            widget.sampleEventRepository.getEventsForSample(widget.sample.id);
+        _isRegistering = false;
+      });
+    } catch (error) {
+      debugPrint('Error: $error');
+
+      if (!mounted) return;
+
+      setState(() => _isRegistering = false);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No se pudo registrar el evento.'),
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(widget.sample.id)),
-      body: FutureBuilder<SampleEventsLoadResult>(
-        future: _eventsFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
+        appBar: AppBar(title: Text(widget.sample.id)),
+        body: FutureBuilder<SampleEventsLoadResult>(
+            future: _eventsFuture,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
 
-          if (snapshot.hasError) {
-            return const Center(
-              child: Text('No se pudieron cargar los eventos de esta muestra.'),
-            );
-          }
-
-          final result = snapshot.data!;
-
-          return ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              _SampleHeader(sample: widget.sample),
-              if (result.usedLocalCache)
-                const Padding(
-                  padding: EdgeInsets.only(top: 16),
+              if (snapshot.hasError) {
+                return const Center(
                   child: Text(
-                    'Cache: Muestras cargadas desde el local, no hay conexion con firebbase '
+                      'No se pudieron cargar los eventos de esta muestra.'),
+                );
+              }
+
+              if (!snapshot.hasData) {
+                return const Center(
+                  child: Text('No se recibieron datos para esta muestra.'),
+                );
+              }
+
+              //events de sample ordenados por fecha
+              final result = snapshot.data!;
+
+              final events = result.events.toList();
+              events.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+
+              final statusLabel = SampleStatus.labelForEvents(events);
+
+              //estado mas reciente y siguiente, para habilitar o no boton de registro
+              final currentStatus = SampleStatus.fromEvents(events);
+              final nextStatus = SampleStatus.nextForEvents(events);
+
+              final unavailableStatusLabel =
+                  events.isNotEmpty && currentStatus == SampleStatus.archived
+                      ? 'Ciclo completado'
+                      : 'Estado no reconocido';
+
+              return ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  _SampleHeader(
+                      sample: widget.sample, statusLabel: statusLabel),
+                  if (result.usedLocalCache)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 16),
+                      child: Text(
+                          'Cache: Muestras cargadas desde el local, no hay conexion con firebbase '),
+                    ),
+                  const SizedBox(height: 14),
+                  Text(
+                    'Historial de procesamiento',
+                    style: Theme.of(context).textTheme.titleLarge,
                   ),
-                ),
-              const SizedBox(height: 14),
-              Text(
-                'Historial de procesamiento',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 14),
-              if (result.events.isEmpty)
-                const _EmptyHistory()
-              else
-                ...result.events.map(
-                  (event) => ListTile(
-                    title: Text(event.type),
-                    subtitle: Text(event.createdAt.toLocal().toString()),
+                  const SizedBox(height: 14),
+                  if (events.isEmpty)
+                    const _EmptyHistory()
+                  else
+                    ...events.map(
+                      (event) => ListTile(
+                        title: Text(event.type),
+                        subtitle: Text(event.createdAt.toLocal().toString()),
+                      ),
+                    ),
+                  const SizedBox(height: 18),
+                  FilledButton(
+                    onPressed: _isRegistering || nextStatus == null
+                        ? null
+                        : _registerNextEvent,
+                    child: _isRegistering
+                        ? const CircularProgressIndicator()
+                        : Text(
+                            nextStatus == null
+                                ? unavailableStatusLabel
+                                : 'Registrar evento siguiente estado -> ${nextStatus.label}',
+                          ),
                   ),
-                ),
-            ],
-          );
-        
-        }
-    
-      )
-    );
+                ],
+              );
+            }));
   }
 }
 
 class _SampleHeader extends StatelessWidget {
-  const _SampleHeader({required this.sample});
+  const _SampleHeader({required this.sample, required this.statusLabel});
 
   final Sample sample;
+  final String statusLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -121,7 +181,7 @@ class _SampleHeader extends StatelessWidget {
                             ),
                       ),
                       const SizedBox(height: 6),
-                      const Chip(label: Text('Sin eventos')),
+                      Chip(label: Text(statusLabel)),
                     ],
                   ),
                 ),
