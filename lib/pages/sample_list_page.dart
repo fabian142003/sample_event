@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:sample_track_shell/models/sample_event.dart';
 import 'package:sample_track_shell/models/sample_status.dart';
 import 'package:sample_track_shell/repositories/sample_event_repository.dart';
+import 'package:sample_track_shell/widgets/sample_filters.dart';
 
 import '../data/sample_seed.dart';
 import '../models/sample.dart';
@@ -21,24 +23,31 @@ class SampleListPage extends StatefulWidget {
 
 class _SampleListPageState extends State<SampleListPage> {
   //traer eventos de una muestra
-  late Map<String, Future<SampleEventsLoadResult>> _eventsBySample;
+  //late Map<String, Future<SampleEventsLoadResult>> _eventsBySample;
+  late Future<List<SampleListItem>> _samplesFuture;
+
+  String? _selectedPriority;
+  String? _selectedStatus;
 
   @override
   void initState() {
     super.initState();
-    _loadEvents();
+    _samplesFuture = _loadSamples();
   }
 
-  void _loadEvents() {
-    _eventsBySample = {};
+  Future<List<SampleListItem>> _loadSamples() async {
+    final items = <SampleListItem>[];
 
     for (final sample in sampleSeed) {
-      _eventsBySample[sample.id] =
-          widget.sampleEventRepository.getEventsForSample(sample.id);
+      final result =
+          await widget.sampleEventRepository.getEventsForSample(sample.id);
+
+      items.add(SampleListItem(sample: sample, events: result.events));
     }
+    return items;
   }
 
-  Future<void> _openDetail(BuildContext context, Sample sample) async {
+  Future<void> _openDetail(Sample sample) async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         builder: (_) => SampleDetailPage(
@@ -51,7 +60,7 @@ class _SampleListPageState extends State<SampleListPage> {
     if (!mounted) return;
 
     setState(() {
-      _eventsBySample[sample.id]  = widget.sampleEventRepository.getEventsForSample(sample.id);
+      _samplesFuture = _loadSamples();
     });
   }
 
@@ -69,42 +78,112 @@ class _SampleListPageState extends State<SampleListPage> {
         ),
       ),
       body: SafeArea(
-        child: ListView.separated(
-          padding: const EdgeInsets.all(16),
-          itemCount: sampleSeed.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 12),
-          itemBuilder: (context, index) {
+        child: FutureBuilder(
+            future: _samplesFuture,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
 
-            final sample = sampleSeed[index];
-            final eventsFuture = _eventsBySample[sample.id]!;
-
-            return FutureBuilder<SampleEventsLoadResult>(
-              future: eventsFuture,
-              builder: (context, snapshot) {
-                String statusLabel;
-
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  statusLabel = 'Cargando...';
-                } else if (snapshot.hasError) {
-                  statusLabel = 'Error al cargar';
-                } else if (snapshot.hasData) {
-                  statusLabel = SampleStatus.labelForEvents(
-                    snapshot.data!.events,
-                  );
-                } else {
-                  statusLabel = 'Sin eventos';
-                }
-
-                return SampleCard(
-                  sample: sample,
-                  statusLabel: statusLabel,
-                  onTap: () => _openDetail(context, sample),
+              if (snapshot.hasError) {
+                return const Center(
+                  child: Text('No se pudieron cargar las muestras.'),
                 );
-              },
-            );
-          },
-        ),
+              }
+
+              if (!snapshot.hasData) {
+                return const Center(child: Text('No se recibieron datos.'));
+              }
+
+              final items = snapshot.data ?? [];
+
+              if (items.isEmpty) {
+                return const Center(
+                    child: Text('No hay muestras registradas.'));
+              }
+
+              final priorities =
+                  items.map((item) => item.sample.priority).toSet().toList();
+
+              final allStatus = [
+                'Sin eventos',
+                ...SampleStatus.values.map((status) => status.label),
+              ];
+
+              //filtrar muestra por prioridad y estado de ult evento
+              final visibleItems = items.where(
+                (item) {
+                  final matchesPriority = _selectedPriority == null ||
+                      _selectedPriority == item.sample.priority;
+
+                  final matchesStatus = _selectedStatus == null ||
+                      _selectedStatus == item.statusLabel;
+
+                  return matchesPriority && matchesStatus;
+                },
+              ).toList();
+
+              return Column(children: [
+                Padding(
+                  padding: const EdgeInsets.all(16),
+
+                  child: SampleFilters(
+                    priorities: priorities,
+                    allStatus: allStatus,
+                    selectedPriority: _selectedPriority,
+                    selectedStatus: _selectedStatus,
+                    onPriorityChanged: (priority) {
+                      setState(() => _selectedPriority = priority);
+                    },
+                    onStatusChanged: (status) {
+                      setState(() => _selectedStatus = status);
+                    },
+                  ),
+                ),
+
+                Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text('Muestras visibles: ${visibleItems.length}'),
+                  ),
+                ),
+
+                Expanded(
+                  child:visibleItems.isEmpty 
+                  ? (Center(child: Text('No hay muestras que cumplan con los filtros'),))
+                  : ListView.separated(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: visibleItems.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 12),
+                    itemBuilder: (context, index) {
+                      final item = visibleItems[index];
+
+                      return SampleCard(
+                        sample: item.sample,
+                        statusLabel: item.statusLabel,
+                        onTap: () => _openDetail(item.sample),
+                      );
+                    },
+                  ),
+                ),
+              ]);
+            }       
+          ),
       ),
     );
   }
+}
+
+//instacia muestra y eventos con su id
+class SampleListItem {
+  const SampleListItem({
+    required this.sample,
+    required this.events,
+  });
+
+  final Sample sample;
+  final List<SampleEvent> events;
+
+  String get statusLabel => SampleStatus.labelForEvents(events);
 }
